@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}로그인 - PyJudge{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5 col-lg-4">
+    <div class="card shadow-sm mt-4">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-4 text-center fw-bold">로그인</h4>
+
+        <div id="error-msg" class="alert alert-danger d-none"></div>
+
+        <form id="login-form">
+          <div class="mb-3">
+            <label class="form-label">사용자명</label>
+            <input type="text" class="form-control" id="username" required autofocus />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">비밀번호</label>
+            <input type="password" class="form-control" id="password" required />
+          </div>
+          <button type="submit" class="btn btn-primary w-100" id="submit-btn">
+            로그인
+          </button>
+        </form>
+
+        <hr />
+        <p class="text-center text-muted small mb-0">
+          계정이 없으신가요? <a href="/register">회원가입</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  if (localStorage.getItem("token")) window.location.href = "/";
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("submit-btn");
+    btn.disabled = true;
+    btn.textContent = "로그인 중...";
+
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("username", data.username);
+      window.location.href = "/problems";
+    } else {
+      const err = await res.json();
+      const msg = document.getElementById("error-msg");
+      msg.textContent = err.detail || "로그인 실패";
+      msg.classList.remove("d-none");
+      btn.disabled = false;
+      btn.textContent = "로그인";
+    }
+  });
+</script>
+{% endblock %}

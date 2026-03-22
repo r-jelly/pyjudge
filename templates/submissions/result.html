@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}제출 결과 - PyJudge{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div id="loading" class="text-center py-5 text-muted">
+      <div class="spinner-border me-2"></div>결과를 불러오는 중...
+    </div>
+
+    <div id="main" class="d-none">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <a id="back-link" href="/problems" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>문제로 돌아가기
+        </a>
+        <span class="text-muted small" id="submit-time"></span>
+      </div>
+
+      <!-- Result banner -->
+      <div id="result-banner" class="alert py-3 mb-3 text-center fs-5 fw-bold"></div>
+
+      <!-- Stats row -->
+      <div class="row g-3 mb-4">
+        <div class="col-4 text-center">
+          <div class="card border-0 shadow-sm py-3">
+            <div class="fs-3 fw-bold" id="stat-score">-</div>
+            <div class="text-muted small">통과 케이스</div>
+          </div>
+        </div>
+        <div class="col-4 text-center">
+          <div class="card border-0 shadow-sm py-3">
+            <div class="fs-3 fw-bold" id="stat-status">-</div>
+            <div class="text-muted small">최종 상태</div>
+          </div>
+        </div>
+        <div class="col-4 text-center">
+          <div class="card border-0 shadow-sm py-3">
+            <div class="fs-3 fw-bold" id="stat-time">-</div>
+            <div class="text-muted small">총 언어</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test case results -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold bg-dark text-white">테스트 케이스 결과</div>
+        <div class="card-body p-0" id="tc-results"></div>
+      </div>
+
+      <!-- Code viewer -->
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold bg-dark text-white d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-filetype-py me-1"></i>제출 코드</span>
+          <button class="btn btn-sm btn-outline-light" onclick="copyCode()">
+            <i class="bi bi-clipboard me-1"></i>복사
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <textarea id="code-viewer"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  requireAuth();
+  const SUBMISSION_ID = {{ submission_id }};
+
+  let codeEditor;
+
+  window.addEventListener("DOMContentLoaded", () => {
+    codeEditor = CodeMirror.fromTextArea(document.getElementById("code-viewer"), {
+      mode: "python",
+      theme: "dracula",
+      lineNumbers: true,
+      readOnly: true,
+      lineWrapping: true,
+    });
+    codeEditor.setSize("100%", "300px");
+    loadResult();
+  });
+
+  async function loadResult() {
+    const res = await fetch(`/api/submissions/${SUBMISSION_ID}`, { headers: apiHeaders() });
+    if (!res.ok) {
+      document.getElementById("loading").innerHTML = '<p class="text-danger">결과를 불러올 수 없습니다.</p>';
+      return;
+    }
+    const data = await res.json();
+
+    document.getElementById("loading").classList.add("d-none");
+    document.getElementById("main").classList.remove("d-none");
+
+    document.getElementById("back-link").href = `/problems/${data.problem_id}`;
+    document.getElementById("submit-time").textContent = data.created_at;
+
+    // Banner
+    const STATUS_INFO = {
+      accepted:            { cls: "alert-success",   icon: "✅", text: "정답입니다!" },
+      wrong_answer:        { cls: "alert-danger",    icon: "❌", text: "틀렸습니다" },
+      time_limit_exceeded: { cls: "alert-warning",   icon: "⏱", text: "시간 초과" },
+      runtime_error:       { cls: "alert-secondary", icon: "💥", text: "런타임 에러" },
+    };
+    const info = STATUS_INFO[data.status] || { cls: "alert-secondary", icon: "❓", text: data.status };
+    const banner = document.getElementById("result-banner");
+    banner.className = `alert py-3 mb-3 text-center fs-5 fw-bold ${info.cls}`;
+    banner.innerHTML = `${info.icon} ${escHtml(data.problem_title)} — ${info.text}`;
+
+    document.getElementById("stat-score").textContent = `${data.passed_count} / ${data.total_count}`;
+    document.getElementById("stat-status").textContent = info.text;
+    document.getElementById("stat-time").textContent = "Python 3";
+
+    // Test case rows
+    const tcContainer = document.getElementById("tc-results");
+    tcContainer.innerHTML = data.results.map((tc, i) => {
+      const passed = tc.status === "accepted";
+      const statusBadge = {
+        accepted:            '<span class="badge bg-success">정답</span>',
+        wrong_answer:        '<span class="badge bg-danger">오답</span>',
+        time_limit_exceeded: '<span class="badge bg-warning text-dark">시간 초과</span>',
+        runtime_error:       '<span class="badge bg-secondary">런타임 에러</span>',
+      }[tc.status] || `<span class="badge bg-secondary">${tc.status}</span>`;
+
+      const label = tc.is_sample ? `예제 ${i+1}` : `히든 ${i+1}`;
+      const icon = passed ? "✅" : "❌";
+      const runtimeMs = tc.runtime_ms != null ? `${tc.runtime_ms}ms` : "-";
+
+      let detail = "";
+      if (tc.is_sample) {
+        detail = `
+          <div class="row g-2 mt-1">
+            <div class="col-md-4">
+              <div class="card bg-dark text-light">
+                <div class="card-header py-1 small">입력</div>
+                <pre class="card-body py-2 mb-0 small">${escHtml(tc.stdin || "(없음)")}</pre>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card bg-dark text-light">
+                <div class="card-header py-1 small">예상 출력</div>
+                <pre class="card-body py-2 mb-0 small">${escHtml(tc.expected_stdout || "")}</pre>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card ${passed ? "bg-dark" : "bg-danger bg-opacity-25"} text-${passed ? "light" : "dark"}">
+                <div class="card-header py-1 small">실제 출력</div>
+                <pre class="card-body py-2 mb-0 small">${escHtml(tc.actual_stdout || "")}</pre>
+              </div>
+            </div>
+            ${tc.stderr ? `<div class="col-12"><div class="alert alert-danger py-1 mb-0 small"><strong>에러:</strong> ${escHtml(tc.stderr)}</div></div>` : ""}
+          </div>
+        `;
+      } else {
+        detail = `<p class="text-muted small mt-1 mb-0">히든 테스트 케이스 — 입출력이 공개되지 않습니다.</p>`;
+      }
+
+      return `
+        <div class="border-bottom px-3 py-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <span>${icon} <strong>${label}</strong> ${statusBadge}</span>
+            <span class="text-muted small">${runtimeMs}</span>
+          </div>
+          ${detail}
+        </div>
+      `;
+    }).join("");
+
+    // Code
+    codeEditor.setValue(data.code);
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(codeEditor.getValue()).then(() => alert("복사되었습니다."));
+  }
+</script>
+{% endblock %}

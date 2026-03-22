@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}문제 풀기 - PyJudge{% endblock %}
+
+{% block content %}
+<div id="loading" class="text-center py-5 text-muted">
+  <div class="spinner-border me-2"></div>문제를 불러오는 중...
+</div>
+
+<div id="main-content" class="d-none">
+  <div class="row g-0" style="height: calc(100vh - 80px)">
+
+    <!-- Left: Problem description -->
+    <div class="col-lg-5 border-end overflow-auto pe-0" style="height:100%">
+      <div class="p-4">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <h4 class="mb-0 fw-bold" id="problem-title"></h4>
+          <span id="difficulty-badge"></span>
+        </div>
+        <p class="text-muted small mb-3">
+          출제자: <span id="problem-author"></span> &nbsp;·&nbsp;
+          시간 제한: <span id="problem-time-limit"></span>초 &nbsp;·&nbsp;
+          정답률: <span id="problem-acceptance"></span>%
+        </p>
+        <hr />
+        <div id="problem-description" class="problem-desc"></div>
+
+        <!-- Sample test cases -->
+        <h6 class="mt-4 fw-semibold">예제</h6>
+        <div id="sample-cases"></div>
+
+        <!-- My previous submissions -->
+        <div id="my-submissions-section" class="d-none mt-4">
+          <h6 class="fw-semibold">내 최근 제출</h6>
+          <div id="my-submissions-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Code editor + submit -->
+    <div class="col-lg-7 d-flex flex-column" style="height:100%">
+      <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-light">
+        <span class="text-muted small"><i class="bi bi-filetype-py me-1"></i>Python 3</span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-secondary" onclick="resetCode()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>초기화
+          </button>
+          <button class="btn btn-sm btn-success" id="submit-btn" onclick="submitCode()">
+            <i class="bi bi-send me-1"></i>제출하기
+          </button>
+        </div>
+      </div>
+
+      <!-- CodeMirror editor -->
+      <div id="editor-wrapper" class="flex-grow-1 overflow-hidden">
+        <textarea id="code-editor"></textarea>
+      </div>
+
+      <!-- Result panel -->
+      <div id="result-panel" class="border-top d-none" style="max-height:280px; overflow-y:auto">
+        <div class="p-3">
+          <div id="result-banner" class="alert mb-2"></div>
+          <div id="result-details"></div>
+          <a id="result-full-link" href="#" class="btn btn-sm btn-outline-primary mt-1">
+            <i class="bi bi-box-arrow-up-right me-1"></i>전체 결과 보기
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const PROBLEM_ID = {{ problem_id }};
+  const DEFAULT_CODE = `# 여기에 Python 코드를 작성하세요\n\n`;
+
+  let editor;
+
+  // Init CodeMirror
+  window.addEventListener("DOMContentLoaded", () => {
+    editor = CodeMirror.fromTextArea(document.getElementById("code-editor"), {
+      mode: "python",
+      theme: "dracula",
+      lineNumbers: true,
+      indentUnit: 4,
+      tabSize: 4,
+      indentWithTabs: false,
+      autofocus: true,
+      lineWrapping: true,
+      extraKeys: { Tab: (cm) => cm.replaceSelection("    ") },
+    });
+    editor.setSize(null, "100%");
+    editor.setValue(DEFAULT_CODE);
+    loadProblem();
+  });
+
+  async function loadProblem() {
+    const res = await fetch(`/api/problems/${PROBLEM_ID}`);
+    if (!res.ok) { window.location.href = "/problems"; return; }
+    const p = await res.json();
+
+    document.getElementById("problem-title").textContent = p.title;
+    document.getElementById("problem-author").textContent = p.author_username;
+    document.getElementById("problem-time-limit").textContent = p.time_limit;
+    document.getElementById("problem-acceptance").textContent = p.acceptance_rate;
+    document.getElementById("difficulty-badge").innerHTML = difficultyBadge(p.difficulty);
+    document.getElementById("problem-description").innerHTML = nl2p(p.description);
+
+    // Sample cases
+    const sc = document.getElementById("sample-cases");
+    if (p.sample_test_cases.length === 0) {
+      sc.innerHTML = '<p class="text-muted small">예제 없음</p>';
+    } else {
+      sc.innerHTML = p.sample_test_cases.map((tc, i) => `
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <div class="card bg-dark text-light">
+              <div class="card-header py-1 small">입력 ${i+1}</div>
+              <pre class="card-body py-2 mb-0 small">${escHtml(tc.stdin || "(없음)")}</pre>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="card bg-dark text-light">
+              <div class="card-header py-1 small">출력 ${i+1}</div>
+              <pre class="card-body py-2 mb-0 small">${escHtml(tc.expected_stdout)}</pre>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    document.getElementById("loading").classList.add("d-none");
+    document.getElementById("main-content").classList.remove("d-none");
+    editor.refresh(); // display:none 상태에서 초기화되어 틀어진 gutter 레이아웃 재계산
+
+    if (localStorage.getItem("token")) loadMySubmissions();
+  }
+
+  async function loadMySubmissions() {
+    const res = await fetch(`/api/submissions?problem_id=${PROBLEM_ID}`, {
+      headers: apiHeaders(),
+    });
+    if (!res.ok) return;
+    const subs = await res.json();
+    if (!subs.length) return;
+
+    const STATUS_LABEL = {
+      accepted: '<span class="badge bg-success">정답</span>',
+      wrong_answer: '<span class="badge bg-danger">오답</span>',
+      time_limit_exceeded: '<span class="badge bg-warning text-dark">시간 초과</span>',
+      runtime_error: '<span class="badge bg-secondary">런타임 에러</span>',
+    };
+
+    document.getElementById("my-submissions-section").classList.remove("d-none");
+    document.getElementById("my-submissions-list").innerHTML = subs.slice(0, 5).map(s => `
+      <a href="/submissions/${s.id}" class="text-decoration-none">
+        <div class="d-flex justify-content-between align-items-center border rounded px-2 py-1 mb-1 hover-light">
+          <span>${STATUS_LABEL[s.status] || s.status}</span>
+          <span class="text-muted small">${s.passed_count}/${s.total_count} &nbsp; ${s.created_at}</span>
+        </div>
+      </a>
+    `).join("");
+  }
+
+  async function submitCode() {
+    if (!requireAuth()) return;
+
+    const code = editor.getValue();
+    if (!code.trim()) { alert("코드를 입력하세요."); return; }
+
+    const btn = document.getElementById("submit-btn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>채점 중...';
+
+    const res = await fetch("/api/submissions", {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ problem_id: PROBLEM_ID, code }),
+    });
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>제출하기';
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.detail || "제출 실패");
+      return;
+    }
+
+    const result = await res.json();
+    showResultPanel(result);
+    loadMySubmissions();
+  }
+
+  function showResultPanel(r) {
+    const panel = document.getElementById("result-panel");
+    const banner = document.getElementById("result-banner");
+    const details = document.getElementById("result-details");
+
+    const statusInfo = {
+      accepted:            { cls: "alert-success",  icon: "✅", text: "정답입니다!" },
+      wrong_answer:        { cls: "alert-danger",   icon: "❌", text: "틀렸습니다" },
+      time_limit_exceeded: { cls: "alert-warning",  icon: "⏱", text: "시간 초과" },
+      runtime_error:       { cls: "alert-secondary",icon: "💥", text: "런타임 에러" },
+    };
+    const info = statusInfo[r.status] || { cls: "alert-secondary", icon: "❓", text: r.status };
+
+    banner.className = `alert ${info.cls} mb-2 py-2`;
+    banner.innerHTML = `${info.icon} <strong>${info.text}</strong> &nbsp;
+      <span class="text-muted">${r.passed_count} / ${r.total_count} 테스트 케이스 통과</span>`;
+
+    details.innerHTML = r.results.map((tc, i) => {
+      const passed = tc.status === "accepted";
+      const icon = passed ? "✅" : "❌";
+      const label = tc.is_sample ? `예제 ${i+1}` : `히든 ${i+1}`;
+      let extra = "";
+      if (!passed && tc.is_sample) {
+        extra = `<div class="small text-muted mt-1">
+          <span>예상: <code>${escHtml(tc.expected_stdout || "")}</code></span><br/>
+          <span>실제: <code>${escHtml(tc.actual_stdout || "")}</code></span>
+          ${tc.stderr ? `<br/><span class="text-danger">에러: ${escHtml(tc.stderr)}</span>` : ""}
+        </div>`;
+      }
+      return `<div class="d-flex flex-column mb-1 px-2 py-1 border rounded bg-light">
+        <div>${icon} <small class="fw-semibold">${label}</small></div>${extra}
+      </div>`;
+    }).join("");
+
+    document.getElementById("result-full-link").href = `/submissions/${r.id}`;
+    panel.classList.remove("d-none");
+  }
+
+  function resetCode() {
+    if (confirm("코드를 초기화하시겠습니까?")) editor.setValue(DEFAULT_CODE);
+  }
+</script>
+{% endblock %}

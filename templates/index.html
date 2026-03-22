@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}PyJudge - Python 코딩 문제 풀기{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8 text-center py-5">
+    <h1 class="display-4 fw-bold mb-3">
+      <i class="bi bi-code-square text-primary"></i> PyJudge
+    </h1>
+    <p class="lead text-muted mb-4">
+      Python 코딩 문제를 직접 만들고 풀어보세요.<br>
+      자동 채점으로 즉시 결과를 확인할 수 있습니다.
+    </p>
+    <div class="d-flex justify-content-center gap-3">
+      <a href="/problems" class="btn btn-primary btn-lg">
+        <i class="bi bi-list-ul me-1"></i>문제 풀기
+      </a>
+      <a href="/problems/create" class="btn btn-outline-secondary btn-lg" id="btn-create">
+        <i class="bi bi-plus-circle me-1"></i>문제 만들기
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row justify-content-center mt-2">
+  <div class="col-lg-8">
+    <div class="row g-4 text-center">
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body py-4">
+            <i class="bi bi-pencil-square fs-1 text-primary mb-3"></i>
+            <h5 class="card-title">문제 출제</h5>
+            <p class="card-text text-muted small">제목, 설명, 테스트 케이스를 작성해 나만의 문제를 만들어 보세요.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body py-4">
+            <i class="bi bi-terminal fs-1 text-success mb-3"></i>
+            <h5 class="card-title">코드 작성</h5>
+            <p class="card-text text-muted small">내장 Python 에디터로 바로 코드를 작성하고 제출하세요.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body py-4">
+            <i class="bi bi-check2-circle fs-1 text-warning mb-3"></i>
+            <h5 class="card-title">자동 채점</h5>
+            <p class="card-text text-muted small">제출 즉시 모든 테스트 케이스 결과를 확인할 수 있습니다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Hide "문제 만들기" button if not logged in
+  if (!localStorage.getItem("token")) {
+    document.getElementById("btn-create").href = "/login";
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+/* ===== Layout ===== */
+body {
+  background-color: #f8f9fa;
+}
+
+.container-fluid {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ===== CodeMirror ===== */
+.CodeMirror {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+#editor-wrapper {
+  /* flex-grow-1 에서 height: 100% 가 동작하려면 min-height: 0 필요 */
+  min-height: 0;
+}
+
+#editor-wrapper .CodeMirror {
+  /* 부모의 flex 높이를 그대로 채움 */
+  height: 100%;
+}
+
+/* ===== Problem description ===== */
+.problem-desc p {
+  line-height: 1.8;
+  margin-bottom: 0.75rem;
+}
+
+.problem-desc pre,
+.problem-desc code {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+
+.problem-desc pre {
+  padding: 12px 16px;
+  overflow-x: auto;
+}
+
+/* ===== Tables ===== */
+.table tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.table tbody tr:hover {
+  background-color: #e9f0ff !important;
+}
+
+/* ===== Cards ===== */
+.hover-light:hover {
+  background-color: #f0f4ff;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #adb5bd; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #6c757d; }
+
+/* ===== Misc ===== */
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.font-monospace {
+  font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+  font-size: 13px;
+}

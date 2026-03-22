@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}문제 만들기 - PyJudge{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <h4 class="fw-bold mb-4"><i class="bi bi-pencil-square me-2"></i>새 문제 만들기</h4>
+
+    <div id="error-msg" class="alert alert-danger d-none"></div>
+
+    <form id="create-form">
+      <!-- Basic info -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold bg-dark text-white">기본 정보</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">제목 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="title" placeholder="문제 제목을 입력하세요" required />
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">난이도</label>
+              <select class="form-select" id="difficulty">
+                <option value="easy">쉬움</option>
+                <option value="medium" selected>보통</option>
+                <option value="hard">어려움</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">시간 제한 (초)</label>
+              <input type="number" class="form-control" id="time-limit" value="5" min="1" max="30" />
+            </div>
+          </div>
+          <div class="mb-0">
+            <label class="form-label fw-semibold">문제 설명 <span class="text-danger">*</span></label>
+            <textarea class="form-control font-monospace" id="description" rows="8"
+              placeholder="문제 설명을 입력하세요. 입력/출력 형식, 제한사항 등을 작성해주세요."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test cases -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold bg-dark text-white d-flex justify-content-between align-items-center">
+          <span>테스트 케이스 <span class="text-muted small fw-normal">(최소 1개 필요)</span></span>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-light" onclick="addTestCase(true)">
+              <i class="bi bi-plus me-1"></i>예제 추가
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-warning" onclick="addTestCase(false)">
+              <i class="bi bi-plus me-1"></i>히든 추가
+            </button>
+          </div>
+        </div>
+        <div class="card-body" id="test-cases-container">
+          <!-- JS will add rows here -->
+        </div>
+        <div id="no-cases-msg" class="card-body text-center text-muted py-4">
+          <i class="bi bi-plus-circle fs-2"></i>
+          <p class="mt-2 mb-0">위 버튼을 눌러 테스트 케이스를 추가하세요.</p>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 justify-content-end">
+        <a href="/problems" class="btn btn-outline-secondary">취소</a>
+        <button type="submit" class="btn btn-primary" id="submit-btn">
+          <i class="bi bi-upload me-1"></i>문제 출제
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  requireAuth();
+
+  let tcIndex = 0;
+
+  function addTestCase(isSample) {
+    document.getElementById("no-cases-msg").classList.add("d-none");
+    const container = document.getElementById("test-cases-container");
+    const idx = tcIndex++;
+    const badge = isSample
+      ? '<span class="badge bg-primary">예제</span>'
+      : '<span class="badge bg-secondary">히든</span>';
+
+    const div = document.createElement("div");
+    div.className = "border rounded p-3 mb-3";
+    div.dataset.idx = idx;
+    div.innerHTML = `
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-semibold small">${badge} 테스트 케이스 ${idx + 1}</span>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeTestCase(${idx})">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+      <input type="hidden" name="is_sample_${idx}" value="${isSample}" />
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label small text-muted">입력 (stdin) <span class="text-muted">(없으면 비워두기)</span></label>
+          <textarea class="form-control font-monospace small" name="stdin_${idx}" rows="3" placeholder="입력 예시"></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small text-muted">예상 출력 (stdout) <span class="text-danger">*</span></label>
+          <textarea class="form-control font-monospace small" name="stdout_${idx}" rows="3" placeholder="정확한 출력 값" required></textarea>
+        </div>
+      </div>
+    `;
+    container.appendChild(div);
+  }
+
+  function removeTestCase(idx) {
+    const el = document.querySelector(`[data-idx="${idx}"]`);
+    if (el) el.remove();
+    if (!document.getElementById("test-cases-container").children.length) {
+      document.getElementById("no-cases-msg").classList.remove("d-none");
+    }
+  }
+
+  // Add 2 default example cases
+  addTestCase(true);
+
+  document.getElementById("create-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const title = document.getElementById("title").value.trim();
+    const description = document.getElementById("description").value.trim();
+    const difficulty = document.getElementById("difficulty").value;
+    const timeLimit = parseInt(document.getElementById("time-limit").value);
+
+    if (!title) { showError("제목을 입력하세요."); return; }
+    if (!description) { showError("문제 설명을 입력하세요."); return; }
+
+    // Collect test cases
+    const container = document.getElementById("test-cases-container");
+    const rows = container.querySelectorAll("[data-idx]");
+    if (!rows.length) { showError("테스트 케이스를 최소 1개 추가하세요."); return; }
+
+    const testCases = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const idx = row.dataset.idx;
+      const isSample = row.querySelector(`[name="is_sample_${idx}"]`).value === "true";
+      const stdin = row.querySelector(`[name="stdin_${idx}"]`).value;
+      const stdout = row.querySelector(`[name="stdout_${idx}"]`).value;
+      if (!stdout) { showError(`테스트 케이스 ${i+1}의 예상 출력을 입력하세요.`); return; }
+      testCases.push({ stdin, expected_stdout: stdout, is_sample: isSample, order_index: i });
+    }
+
+    const btn = document.getElementById("submit-btn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>출제 중...';
+
+    const res = await fetch("/api/problems", {
+      method: "POST",
+      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ title, description, difficulty, time_limit: timeLimit, test_cases: testCases }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      window.location.href = `/problems/${data.id}`;
+    } else {
+      const err = await res.json();
+      showError(err.detail || "출제 실패");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-upload me-1"></i>문제 출제';
+    }
+  });
+
+  function showError(msg) {
+    const el = document.getElementById("error-msg");
+    el.textContent = msg;
+    el.classList.remove("d-none");
+    el.scrollIntoView({ behavior: "smooth" });
+  }
+</script>
+{% endblock %}

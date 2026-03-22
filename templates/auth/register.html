@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}회원가입 - PyJudge{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5 col-lg-4">
+    <div class="card shadow-sm mt-4">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-4 text-center fw-bold">회원가입</h4>
+
+        <div id="error-msg" class="alert alert-danger d-none"></div>
+
+        <form id="register-form">
+          <div class="mb-3">
+            <label class="form-label">사용자명 <small class="text-muted">(2자 이상)</small></label>
+            <input type="text" class="form-control" id="username" required autofocus />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">이메일</label>
+            <input type="email" class="form-control" id="email" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">비밀번호 <small class="text-muted">(4자 이상)</small></label>
+            <input type="password" class="form-control" id="password" required />
+          </div>
+          <div class="mb-4">
+            <label class="form-label">비밀번호 확인</label>
+            <input type="password" class="form-control" id="password2" required />
+          </div>
+          <button type="submit" class="btn btn-primary w-100" id="submit-btn">회원가입</button>
+        </form>
+
+        <hr />
+        <p class="text-center text-muted small mb-0">
+          이미 계정이 있으신가요? <a href="/login">로그인</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  if (localStorage.getItem("token")) window.location.href = "/";
+
+  document.getElementById("register-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const pw = document.getElementById("password").value;
+    const pw2 = document.getElementById("password2").value;
+
+    if (pw !== pw2) {
+      showError("비밀번호가 일치하지 않습니다.");
+      return;
+    }
+
+    const btn = document.getElementById("submit-btn");
+    btn.disabled = true;
+    btn.textContent = "가입 중...";
+
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        email: document.getElementById("email").value,
+        password: pw,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("username", data.username);
+      window.location.href = "/problems";
+    } else {
+      const err = await res.json();
+      showError(err.detail || "가입 실패");
+      btn.disabled = false;
+      btn.textContent = "회원가입";
+    }
+  });
+
+  function showError(msg) {
+    const el = document.getElementById("error-msg");
+    el.textContent = msg;
+    el.classList.remove("d-none");
+  }
+</script>
+{% endblock %}
